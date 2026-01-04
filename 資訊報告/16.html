@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>古人萬惡 鑽研術數 今我受害 怒不可遏</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #1a1a1d;
+            font-family: "Microsoft JhengHei", sans-serif;
+            color: #fff;
+            user-select: none;
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(90deg, #1e272e, #000000);
+            display: none;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            text-align: right;
+            z-index: 100;
+        }
+        .stat-box {
+            font-size: 24px;
+            margin-bottom: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 1px solid #f1c40f;
+        }
+        button {
+            padding: 10px 15px;
+            font-size: 14px;
+            cursor: pointer;
+            background: #c0392b;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin: 2px;
+        }
+        #menu {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: #2c3e50;
+        }
+        .char-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 220px);
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .char-card {
+            padding: 20px;
+            background: #34495e;
+            border: 2px solid #f1c40f;
+            border-radius: 15px;
+            cursor: pointer;
+            text-align: center;
+        }
+        .player-wrapper {
+            position: absolute;
+            left: 30px;
+            width: 100px;
+            height: 100px;
+            z-index: 50;
+        }
+        .shooter-base { 
+            width: 100px;
+            height: 100px;
+            background-image: url('豌豆射手.webp'); 
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+        .bullet {
+            position: absolute;
+            width: 50px; 
+            height: 50px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            z-index: 40;
+        }
+        .target-head {
+            position: absolute;
+            width: 80px; 
+            height: 80px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            z-index: 30;
+        }
+        #overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); display: none;
+            flex-direction: column; align-items: center; justify-content: center; z-index: 200;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="menu">
+        <h1 style="color:#f1c40f; text-align:center;">古人萬惡 鑽研術數<br>今我受害 怒不可遏</h1>
+        <div class="char-grid">
+            <div class="char-card" onclick="initGame('牛頓', '榴槤.jpg', '牛頓.jpg')"><h2>牛頓</h2><p>射擊：榴槤</p></div>
+            <div class="char-card" onclick="initGame('道爾頓', '原子.png', '道爾頓.jpg')"><h2>道爾頓</h2><p>射擊：原子</p></div>
+            <div class="char-card" onclick="initGame('孟德爾', '豌豆.png', '孟德爾.jpg')"><h2>孟德爾</h2><p>射擊：豌豆</p></div>
+            <div class="char-card" onclick="initGame('王安石', '肥皂.jpg', '王安石.jpg')"><h2>王安石</h2><p>射擊：肥皂</p></div>
+        </div>
+    </div>
+
+    <div id="game-container">
+        <div id="ui-layer">
+            <div class="stat-box">得分: <span id="score">0</span></div>
+            <div class="stat-box">時間: <span id="timer">60</span>s</div>
+            <button onclick="togglePause()" id="pauseBtn">暫停遊戲</button>
+            <button onclick="resetGame()">重新開始</button>
+            <button onclick="goToMenu()">更換角色</button>
+        </div>
+
+        <div id="player" class="player-wrapper">
+            <div class="shooter-base"></div>
+        </div>
+
+        <div id="overlay">
+            <h1 id="result-title">復仇結束</h1>
+            <h2 id="final-score">得分：0</h2>
+            <button onclick="resetGame()" style="font-size:20px; padding:10px 30px;">再打一次</button>
+            <button onclick="goToMenu()" style="background:#7f8c8d;">回主選單</button>
+        </div>
+    </div>
+
+<script>
+    let score = 0, timeLeft = 60, gameActive = false, isPaused = false;
+    let currentBulletImg = '', currentTargetImg = '';
+    let timerInt, spawnInt;
+    
+    const container = document.getElementById('game-container');
+    const player = document.getElementById('player');
+    const scoreText = document.getElementById('score');
+    const timerText = document.getElementById('timer');
+
+    const TARGET_SPEED = 2.0; // 調慢一點點
+    const BULLET_SPEED = 8;
+    const SPAWN_INTERVAL = 1500;
+
+    window.addEventListener('mousemove', (e) => {
+        if (!gameActive || isPaused) return;
+        let y = e.clientY - 50;
+        if (y < 0) y = 0;
+        if (y > window.innerHeight - 100) y = window.innerHeight - 100;
+        player.style.top = y + 'px';
+    });
+
+    window.addEventListener('mousedown', (e) => {
+        if (!gameActive || isPaused || e.target.tagName === 'BUTTON') return;
+        fire();
+    });
+
+    function initGame(name, bulletImg, targetImg) {
+        currentBulletImg = bulletImg;
+        currentTargetImg = targetImg;
+        document.getElementById('menu').style.display = 'none';
+        container.style.display = 'block';
+        resetGame();
+    }
+
+    function resetGame() {
+        score = 0; timeLeft = 60; gameActive = true; isPaused = false;
+        scoreText.innerText = score;
+        timerText.innerText = timeLeft;
+        document.getElementById('overlay').style.display = 'none';
+        document.querySelectorAll('.bullet, .target-head').forEach(el => el.remove());
+        clearInterval(timerInt); clearInterval(spawnInt);
+        timerInt = setInterval(updateTimer, 1000);
+        spawnInt = setInterval(createTarget, SPAWN_INTERVAL);
+        requestAnimationFrame(updateFrame);
+    }
+
+    function updateTimer() {
+        if (isPaused) return;
+        timeLeft--;
+        timerText.innerText = timeLeft;
+        if (timeLeft <= 0) endGame();
+    }
+
+    function fire() {
+        const b = document.createElement('div');
+        b.className = 'bullet';
+        b.style.backgroundImage = `url('${currentBulletImg}')`;
+        b.style.top = (parseInt(player.style.top) + 25) + 'px';
+        b.style.left = '110px';
+        container.appendChild(b);
+    }
+
+    function createTarget() {
+        if (isPaused) return;
+        const t = document.createElement('div');
+        t.className = 'target-head';
+        t.style.backgroundImage = `url('${currentTargetImg}')`;
+        t.style.top = Math.random() * (window.innerHeight - 100) + 'px';
+        t.style.right = '-80px';
+        container.appendChild(t);
+    }
+
+    function updateFrame() {
+        if (!gameActive || isPaused) {
+            if (gameActive) requestAnimationFrame(updateFrame);
+            return;
+        }
+
+        document.querySelectorAll('.bullet').forEach(b => {
+            let curX = parseInt(b.style.left);
+            curX += BULLET_SPEED;
+            b.style.left = curX + 'px';
+            if (curX > window.innerWidth) b.remove();
+        });
+
+        document.querySelectorAll('.target-head').forEach(t => {
+            let curRight = parseInt(t.style.right);
+            curRight += TARGET_SPEED;
+            t.style.right = curRight + 'px';
+
+            if (curRight > window.innerWidth) {
+                t.remove();
+                score = Math.max(0, score - 1);
+                scoreText.innerText = score;
+            }
+
+            document.querySelectorAll('.bullet').forEach(b => {
+                if (checkHit(b, t)) {
+                    b.remove();
+                    t.remove();
+                    score++;
+                    scoreText.innerText = score;
+                }
+            });
+        });
+        requestAnimationFrame(updateFrame);
+    }
+
+    function checkHit(rect1, rect2) {
+        const r1 = rect1.getBoundingClientRect();
+        const r2 = rect2.getBoundingClientRect();
+        return !(r1.right < r2.left || r1.left > r2.right || r1.bottom < r2.top || r1.top > r2.bottom);
+    }
+
+    function togglePause() {
+        isPaused = !isPaused;
+        document.getElementById('pauseBtn').innerText = isPaused ? '繼續遊戲' : '暫停遊戲';
+    }
+
+    function goToMenu() {
+        gameActive = false;
+        container.style.display = 'none';
+        document.getElementById('menu').style.display = 'flex';
+    }
+
+    function endGame() {
+        gameActive = false;
+        document.getElementById('overlay').style.display = 'flex';
+        document.getElementById('final-score').innerText = '最終得分：' + score;
+    }
+</script>
+</body>
+</html>
